@@ -20,6 +20,8 @@ internal class Program
         "sgui-hf-container"
     };
 
+    private static IEnumerable<string>? tasks;
+
     private static bool IsHangFireSelected()
     {
         return selectedProjects.Contains("sgui-hf-container");
@@ -36,7 +38,8 @@ internal class Program
     }
 
     private static List<string> selectedProjects = new();
-    private static Configuration configuration;
+    private static List<string> selectedTasks = new();
+    private static Configuration? configuration;
 
     private static void Main(string[] args)
     {
@@ -68,6 +71,24 @@ internal class Program
                         "[green]<enter>[/] to accept)[/]")
                     .AddChoices(projects));
 
+            tasks = new List<string>()
+            {
+                "Copiar contenido de SGUI a SGUI-ASI",
+                "Enviar cambios de GIT de SGUI-ASI a Origin Master",
+                $"Actualizar repositorio en {configuration!.Host}",
+                $"Deploy de aplicaciones ({string.Join(", ", selectedProjects!)})"
+            };
+
+            selectedTasks = AnsiConsole.Prompt(
+                new MultiSelectionPrompt<string>()
+                    .Title("Selecciona las tareas a realizar")
+                    .Required()
+                    .PageSize(10)
+                    .InstructionsText(
+                        "[grey](Press [blue]<space>[/] to toggle a project, " +
+                        "[green]<enter>[/] to accept)[/]")
+                    .AddChoices(tasks));
+
             SshClient = new(connectionInfo);
 
             ExecuteNextCommands();
@@ -75,6 +96,8 @@ internal class Program
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]{ex.Message}[/]");
+            Console.WriteLine("Finalizado con errores. Presione cualquier tecla para cerrar.");
+            Console.ReadKey();
         }
     }
 
@@ -82,104 +105,111 @@ internal class Program
     {
         try
         {
-            var result = Cli.Wrap("robocopy")
-                .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                .WithArguments($"{configuration.SguiPath} {configuration.SguiAsiSourcePath} -e -Xd .vs .git bin obj")
-                .ExecuteAsync().Task.Result;
-
-            if (result.ExitCode >= 8)
+            if (selectedTasks.Contains(tasks!.ElementAt(0)))
             {
-                Environment.Exit(1);
+                DirectoryInfo di = new(configuration!.SguiAsiSourcePath!);
+
+                foreach (var dir in di.GetDirectories())
+                {
+                    dir.Delete(true);
+                }
+
+                var result = Cli.Wrap("robocopy")
+                    .WithValidation(CommandResultValidation.None)
+                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithArguments($"{configuration.SguiPath} {configuration.SguiAsiSourcePath} -e -Xd .vs .git bin obj")
+                    .ExecuteAsync().Task.Result;
+
+                if (result.ExitCode >= 8)
+                {
+                    Console.WriteLine("Finalizado con errores. Presione cualquier tecla para cerrar.");
+                    Console.ReadKey();
+                    Environment.Exit(1);
+                }
             }
 
-            result = Cli.Wrap("git")
+            if (selectedTasks.Contains(tasks.ElementAt(1)))
+            {
+                var result = Cli.Wrap("git")
                  .WithValidation(CommandResultValidation.None)
                  .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
                  .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
                  .WithArguments($"status")
                  .ExecuteAsync().Task.Result;
 
-            //result = Cli.Wrap("git")
-            //     .WithValidation(CommandResultValidation.None)
-            //     .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-            //     .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-            //     .WithArguments("diff --exit-code")
-            //     .ExecuteAsync().Task.Result;
+                result = Cli.Wrap("git")
+                    .WithValidation(CommandResultValidation.None)
+                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithArguments("add :/")
+                    .ExecuteAsync().Task.Result;
 
-            //if (result.ExitCode == 1)
-            //{
-            result = Cli.Wrap("git")
-                .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                .WithArguments("add :/")
-                .ExecuteAsync().Task.Result;
+                result = Cli.Wrap("git")
+                    .WithValidation(CommandResultValidation.None)
+                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithArguments($"commit -a -m \"deploy {DateTime.Now:yyyyMMdd mmss}\"")
+                    .ExecuteAsync().Task.Result;
 
-            result = Cli.Wrap("git")
-                .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                .WithArguments($"commit -a -m \"deploy {DateTime.Now:yyyyMMdd mmss}\"")
-                .ExecuteAsync().Task.Result;
-
-            result = Cli.Wrap("git")
-                .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                .WithArguments("push origin master")
-                .ExecuteAsync().Task.Result;
-            //}
+                result = Cli.Wrap("git")
+                    .WithValidation(CommandResultValidation.None)
+                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithArguments("push origin master")
+                    .ExecuteAsync().Task.Result;
+            }
 
             SshClient.Connect();
 
-            PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; git pull origin master"));
-
-            Console.WriteLine("Finalizado.");
-            Console.ReadKey();
-            Environment.Exit(0);
-
-            PrintAndWaitCommand(SshClient.CreateCommand($"mysql -u {configuration.MySqlUsername} -p{configuration.MySqlPassword} -e 'UPDATE Parametros SET ValorChar=date_format(Now(), \"%Y.%m.%d.%H%i\") WHERE CodigoParametro=\"SGUI.Version\";' SGUI_Datos"));
-
-            foreach (var project in projects)
+            if (selectedTasks.Contains(tasks.ElementAt(2)))
             {
-                if (IsAppSelected() && project == "sgui-app-container")
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman stop sgui-app-container"));
+                PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; git pull origin master"));
+            }
 
-                if (IsApiSelected() && project == "sgui-api-container")
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman stop sgui-api-container"));
+            if (selectedTasks.Contains(tasks.ElementAt(3)))
+            {
+                PrintAndWaitCommand(SshClient.CreateCommand($"mysql -u {configuration!.MySqlUsername} -p{configuration.MySqlPassword} -e 'UPDATE Parametros SET ValorChar=date_format(Now(), \"%Y.%m.%d.%H%i\") WHERE CodigoParametro=\"SGUI.Version\";' SGUI_Datos"));
 
-                if (IsHangFireSelected() && project == "sgui-hf-container")
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman stop sgui-hf-container"));
-
-                if (IsAppSelected() && project == "sgui-app-container")
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rm sgui-app-container"));
-
-                if (IsApiSelected() && project == "sgui-api-container")
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rm sgui-api-container"));
-
-                if (IsHangFireSelected() && project == "sgui-hf-container")
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rm sgui-hf-container"));
-
-                PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rmi --all"));
-
-                if (IsAppSelected() && project == "sgui-app-container")
+                foreach (var project in projects)
                 {
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-app-image -f source/Dockerfile.app"));
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:4000 --name sgui-app-container --pod sgui-pod localhost/sgui-app-image"));
-                }
+                    if (IsAppSelected() && project == "sgui-app-container")
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman stop sgui-app-container"));
 
-                if (IsApiSelected() && project == "sgui-api-container")
-                {
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-api-image -f source/Dockerfile.api"));
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:5000 --name sgui-api-container --pod sgui-pod localhost/sgui-api-image"));
-                }
+                    if (IsApiSelected() && project == "sgui-api-container")
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman stop sgui-api-container"));
 
-                if (IsHangFireSelected() && project == "sgui-hf-container")
-                {
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-hf-image -f source/Dockerfile.hf"));
-                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:6000 --name sgui-hf-container --pod sgui-pod localhost/sgui-hf-image"));
+                    if (IsHangFireSelected() && project == "sgui-hf-container")
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman stop sgui-hf-container"));
+
+                    if (IsAppSelected() && project == "sgui-app-container")
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rm sgui-app-container"));
+
+                    if (IsApiSelected() && project == "sgui-api-container")
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rm sgui-api-container"));
+
+                    if (IsHangFireSelected() && project == "sgui-hf-container")
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rm sgui-hf-container"));
+
+                    PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman rmi --all"));
+
+                    if (IsAppSelected() && project == "sgui-app-container")
+                    {
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-app-image -f source/Dockerfile.app"));
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:4000 --name sgui-app-container --pod sgui-pod localhost/sgui-app-image"));
+                    }
+
+                    if (IsApiSelected() && project == "sgui-api-container")
+                    {
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-api-image -f source/Dockerfile.api"));
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:5000 --name sgui-api-container --pod sgui-pod localhost/sgui-api-image"));
+                    }
+
+                    if (IsHangFireSelected() && project == "sgui-hf-container")
+                    {
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-hf-image -f source/Dockerfile.hf"));
+                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:6000 --name sgui-hf-container --pod sgui-pod localhost/sgui-hf-image"));
+                    }
                 }
             }
 
@@ -191,6 +221,7 @@ internal class Program
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]{ex.Message}[/]");
+            Console.WriteLine("Finalizado con errores. Presione cualquier tecla para cerrar.");
             Console.ReadKey();
             Environment.Exit(-1);
         }
@@ -226,13 +257,5 @@ internal class Program
         }
 
         command.EndExecute(result);
-    }
-
-    private static string Listen(object? sender, out ShellStream shellStreamSsh)
-    {
-        shellStreamSsh = (ShellStream)sender!;
-        string strData = shellStreamSsh.Read();
-        Console.Write(strData);
-        return strData.Trim();
     }
 }
