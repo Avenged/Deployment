@@ -1,0 +1,10 @@
+{
+  "host": "10.9.11.103",
+  "username": "devadmin",
+  "password": "sgui2022!",
+  "sguiPath": "..\\..\\SGUI\\",
+  "sguiAsiPath": "..\\",
+  "sguiAsiSourcePath": "..\\source\\",
+  "mySqlUsername": "sa",
+  "mySqlPassword": "#Admin1"
+}
