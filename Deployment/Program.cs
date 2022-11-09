@@ -149,7 +149,7 @@ internal class Program
                     .WithValidation(CommandResultValidation.None)
                     .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
                     .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                    .WithArguments($"commit -a -m \"deploy {DateTime.Now:yyyyMMdd mmss}\"")
+                    .WithArguments($"commit -a -m \"deploy {DateTime.Now:yyyyMMdd HH:mm:ss}\"")
                     .ExecuteAsync().Task.Result;
 
                 result = Cli.Wrap("git")
