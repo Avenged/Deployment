@@ -129,14 +129,14 @@ internal class Program
                 }
             }
 
-            if (selectedTasks.Contains(tasks.ElementAt(1)))
+            if (selectedTasks.Contains(tasks!.ElementAt(1)))
             {
                 var result = Cli.Wrap("git")
-                 .WithValidation(CommandResultValidation.None)
-                 .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                 .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                 .WithArguments($"status")
-                 .ExecuteAsync().Task.Result;
+                    .WithValidation(CommandResultValidation.None)
+                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithArguments($"status")
+                    .ExecuteAsync().Task.Result;
 
                 result = Cli.Wrap("git")
                     .WithValidation(CommandResultValidation.None)
@@ -156,18 +156,26 @@ internal class Program
                     .WithValidation(CommandResultValidation.None)
                     .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
                     .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithArguments("pull origin master")
+                    .ExecuteAsync().Task.Result;
+
+
+                result = Cli.Wrap("git")
+                    .WithValidation(CommandResultValidation.None)
+                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
                     .WithArguments("push origin master")
                     .ExecuteAsync().Task.Result;
             }
 
             SshClient.Connect();
 
-            if (selectedTasks.Contains(tasks.ElementAt(2)))
+            if (selectedTasks.Contains(tasks!.ElementAt(2)))
             {
                 PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; git pull origin master"));
             }
 
-            if (selectedTasks.Contains(tasks.ElementAt(3)))
+            if (selectedTasks.Contains(tasks!.ElementAt(3)))
             {
                 PrintAndWaitCommand(SshClient.CreateCommand($"mysql -u {configuration!.MySqlUsername} -p{configuration.MySqlPassword} -e 'UPDATE Parametros SET ValorChar=date_format(Now(), \"%Y.%m.%d.%H%i\") WHERE CodigoParametro=\"SGUI.Version\";' SGUI_Datos"));
 
