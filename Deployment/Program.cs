@@ -40,6 +40,8 @@ internal class Program
     private static List<string> selectedProjects = new();
     private static List<string> selectedTasks = new();
     private static Configuration? configuration;
+    private static bool buildLocal;
+    private static bool onlyTransfer;
 
     private static void Main(string[] args)
     {
@@ -89,8 +91,17 @@ internal class Program
                         "[green]<enter>[/] to accept)[/]")
                     .AddChoices(tasks));
 
-            SshClient = new(connectionInfo);
+            if (AnsiConsole.Confirm("Correr docker build localmente y transferir imagen?"))
+            {
+                buildLocal = true;
+                if (AnsiConsole.Confirm("Desea transferir solo la imagen y omitir el build?"))
+                {
+                    onlyTransfer = true;
+                }
+            }
 
+            SshClient = new(connectionInfo);
+            
             ExecuteNextCommands();
         }
         catch (Exception ex)
@@ -116,8 +127,8 @@ internal class Program
 
                 var result = Cli.Wrap("robocopy")
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                     .WithArguments($"{configuration.SguiPath} {configuration.SguiAsiSourcePath} -e -Xd .vs .git bin obj")
                     .ExecuteAsync().Task.Result;
 
@@ -133,37 +144,36 @@ internal class Program
             {
                 var result = Cli.Wrap("git")
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                     .WithArguments($"status")
                     .ExecuteAsync().Task.Result;
 
                 result = Cli.Wrap("git")
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                     .WithArguments("add :/")
                     .ExecuteAsync().Task.Result;
 
                 result = Cli.Wrap("git")
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                     .WithArguments($"commit -a -m \"deploy {DateTime.Now:yyyyMMdd HH:mm:ss}\"")
                     .ExecuteAsync().Task.Result;
 
                 result = Cli.Wrap("git")
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-                    .WithArguments("pull origin master")
+                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithArguments("pull -s recursive -X ours")
                     .ExecuteAsync().Task.Result;
-
 
                 result = Cli.Wrap("git")
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-                    .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                     .WithArguments("push origin master")
                     .ExecuteAsync().Task.Result;
             }
@@ -203,19 +213,93 @@ internal class Program
 
                     if (IsAppSelected() && project == "sgui-app-container")
                     {
-                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-app-image -f source/Dockerfile.app"));
+                        if (buildLocal)
+                        {
+                            var command = Cli.Wrap("cd").WithArguments("..") | 
+                                Cli.Wrap("docker")
+                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithArguments($"build -t \"sgui-app-image\" -f Dockerfile.app .");
+
+                            var res = command.ExecuteAsync().Task.Result;
+
+                            command = Cli.Wrap("docker")
+                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithArguments($"save sgui-app-image") |
+                                Cli.Wrap("ssh")
+                                .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
+
+                            res = command.ExecuteAsync().Task.Result;
+                        }
+                        else
+                        {
+                            PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-app-image -f source/Dockerfile.app"));
+                        }
+
                         PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:4000 --name sgui-app-container --pod sgui-pod localhost/sgui-app-image"));
                     }
 
                     if (IsApiSelected() && project == "sgui-api-container")
                     {
-                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-api-image -f source/Dockerfile.api"));
+                        if (buildLocal)
+                        {
+                            var command = Cli.Wrap("cd").WithArguments("..") |
+                                Cli.Wrap("docker")
+                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithArguments($"build -t \"sgui-api-image\" -f \"../source/Dockerfile.api\" ../");
+
+                            var res = command.ExecuteAsync().Task.Result;
+
+                            command = Cli.Wrap("docker")
+                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithArguments($"save sgui-api-image") |
+                                Cli.Wrap("ssh")
+                                .WithValidation(CommandResultValidation.None)
+                                .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
+
+                            res = command.ExecuteAsync().Task.Result;
+                        }
+                        else
+                        {
+                            PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-api-image -f source/Dockerfile.api"));
+                        }
+                        
                         PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:5000 --name sgui-api-container --pod sgui-pod localhost/sgui-api-image"));
                     }
 
                     if (IsHangFireSelected() && project == "sgui-hf-container")
                     {
-                        PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-hf-image -f source/Dockerfile.hf"));
+                        if (buildLocal)
+                        {
+                            if (!onlyTransfer)
+                            {
+                                var command = Cli.Wrap("docker")
+                                    .WithWorkingDirectory(configuration.SguiAsiSourcePath!)
+                                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                    .WithArguments($"build -t \"sgui-hf-image\" -f Dockerfile.hf .");
+
+                                _ = command.ExecuteAsync().Task.Result;
+                            }
+
+                            var command1 = Cli.Wrap("docker")
+                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                .WithArguments($"save sgui-hf-image") |
+                                Cli.Wrap("ssh")
+                                .WithValidation(CommandResultValidation.None)
+                                .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
+                            
+                            _ = command1.ExecuteAsync().Task.Result;
+                        }
+                        else
+                        {
+                            PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman build -t sgui-hf-image -f source/Dockerfile.hf"));
+                        }
+                        
                         PrintAndWaitCommand(SshClient.CreateCommand("cd sgui; sudo podman run -dt -e ASPNETCORE_URLS=http://+:6000 --name sgui-hf-container --pod sgui-pod localhost/sgui-hf-image"));
                     }
                 }
