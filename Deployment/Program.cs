@@ -215,22 +215,25 @@ internal class Program
                     {
                         if (buildLocal)
                         {
-                            var command = Cli.Wrap("cd").WithArguments("..") | 
-                                Cli.Wrap("docker")
-                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
-                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
-                                .WithArguments($"build -t \"sgui-app-image\" -f Dockerfile.app .");
+                            if (!onlyTransfer)
+                            {
+                                var command = Cli.Wrap("docker")
+                                    .WithWorkingDirectory(configuration.SguiAsiSourcePath!)
+                                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                    .WithArguments($"build -t \"sgui-app-image\" -f Dockerfile.app .");
 
-                            var res = command.ExecuteAsync().Task.Result;
-
-                            command = Cli.Wrap("docker")
+                                _ = command.ExecuteAsync().Task.Result;
+                            }
+                                
+                            var command1 = Cli.Wrap("docker")
                                 .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                 .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                 .WithArguments($"save sgui-app-image") |
                                 Cli.Wrap("ssh")
                                 .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
 
-                            res = command.ExecuteAsync().Task.Result;
+                            _ = command1.ExecuteAsync().Task.Result;
                         }
                         else
                         {
@@ -244,15 +247,18 @@ internal class Program
                     {
                         if (buildLocal)
                         {
-                            var command = Cli.Wrap("cd").WithArguments("..") |
-                                Cli.Wrap("docker")
-                                .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
-                                .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
-                                .WithArguments($"build -t \"sgui-api-image\" -f \"../source/Dockerfile.api\" ../");
+                            if (!onlyTransfer)
+                            {
+                                var command = Cli.Wrap("docker")
+                                    .WithWorkingDirectory(configuration.SguiAsiSourcePath!)
+                                    .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                    .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
+                                    .WithArguments($"build -t \"sgui-api-image\" -f Dockerfile.api .");
 
-                            var res = command.ExecuteAsync().Task.Result;
+                                _ = command.ExecuteAsync().Task.Result;
+                            }
 
-                            command = Cli.Wrap("docker")
+                            var command1 = Cli.Wrap("docker")
                                 .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                 .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                 .WithArguments($"save sgui-api-image") |
@@ -260,7 +266,7 @@ internal class Program
                                 .WithValidation(CommandResultValidation.None)
                                 .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
 
-                            res = command.ExecuteAsync().Task.Result;
+                            _ = command1.ExecuteAsync().Task.Result;
                         }
                         else
                         {
