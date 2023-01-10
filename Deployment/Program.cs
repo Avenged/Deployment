@@ -187,7 +187,7 @@ internal class Program
 
             if (selectedTasks.Contains(tasks!.ElementAt(3)))
             {
-                PrintAndWaitCommand(SshClient.CreateCommand($"mysql -u {configuration!.MySqlUsername} -p{configuration.MySqlPassword} -e 'UPDATE Parametros SET ValorChar=date_format(Now(), \"%Y.%m.%d.%H%i\") WHERE CodigoParametro=\"SGUI.Version\";' SGUI_Datos"));
+                //PrintAndWaitCommand(SshClient.CreateCommand($"mysql -u {configuration!.MySqlUsername} -p{configuration.MySqlPassword} -e 'UPDATE Parametros SET ValorChar=date_format(Now(), \"%Y.%m.%d.%H%i\") WHERE CodigoParametro=\"SGUI.Version\";' SGUI_Datos"));
 
                 foreach (var project in projects)
                 {
@@ -218,7 +218,7 @@ internal class Program
                             if (!onlyTransfer)
                             {
                                 var command = Cli.Wrap("docker")
-                                    .WithWorkingDirectory(configuration.SguiAsiSourcePath!)
+                                    .WithWorkingDirectory(configuration!.SguiAsiSourcePath!)
                                     .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                     .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                     .WithArguments($"build -t \"sgui-app-image\" -f Dockerfile.app .");
@@ -231,7 +231,7 @@ internal class Program
                                 .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                 .WithArguments($"save sgui-app-image") |
                                 Cli.Wrap("ssh")
-                                .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
+                                .WithArguments($"-C {configuration!.Username}@{configuration.Host} sudo podman load");
 
                             _ = command1.ExecuteAsync().Task.Result;
                         }
@@ -250,7 +250,7 @@ internal class Program
                             if (!onlyTransfer)
                             {
                                 var command = Cli.Wrap("docker")
-                                    .WithWorkingDirectory(configuration.SguiAsiSourcePath!)
+                                    .WithWorkingDirectory(configuration!.SguiAsiSourcePath!)
                                     .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                     .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                     .WithArguments($"build -t \"sgui-api-image\" -f Dockerfile.api .");
@@ -264,7 +264,7 @@ internal class Program
                                 .WithArguments($"save sgui-api-image") |
                                 Cli.Wrap("ssh")
                                 .WithValidation(CommandResultValidation.None)
-                                .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
+                                .WithArguments($"-C {configuration!.Username}@{configuration.Host} sudo podman load");
 
                             _ = command1.ExecuteAsync().Task.Result;
                         }
@@ -283,7 +283,7 @@ internal class Program
                             if (!onlyTransfer)
                             {
                                 var command = Cli.Wrap("docker")
-                                    .WithWorkingDirectory(configuration.SguiAsiSourcePath!)
+                                    .WithWorkingDirectory(configuration!.SguiAsiSourcePath!)
                                     .WithStandardOutputPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                     .WithStandardErrorPipe(PipeTarget.ToDelegate(Console.WriteLine))
                                     .WithArguments($"build -t \"sgui-hf-image\" -f Dockerfile.hf .");
@@ -297,7 +297,7 @@ internal class Program
                                 .WithArguments($"save sgui-hf-image") |
                                 Cli.Wrap("ssh")
                                 .WithValidation(CommandResultValidation.None)
-                                .WithArguments($"-C {configuration.Username}@{configuration.Host} sudo podman load");
+                                .WithArguments($"-C {configuration!.Username}@{configuration.Host} sudo podman load");
                             
                             _ = command1.ExecuteAsync().Task.Result;
                         }
